@@ -27,6 +27,8 @@ class Surface:
         
         if Geometry.upper() == 'PLANE':
             
+            self.N_POINTS = len(POINTS)
+            
             tempHandler = Maths(POINTS, NNeighbors)
             
             self.POINTS = tempHandler.CreatePeriodicImages((POINTS[:,0].max(),
@@ -299,9 +301,9 @@ class Surface:
                        qhull_options = 'QJ')
         hull = tri.convex_hull.ravel()
         
-        tri = [sorted(t) for t in tri.simplices if not any(_ in hull for _ in t)]
+        tri = np.array([sorted(t) for t in tri.simplices if ((not any(_ in hull for _ in t)) and np.any(t < self.N_POINTS))])
         
-        return UV, tri
+        return UV, np.unique(tri, axis = 0)
         
     def MeshToArray(self,):
         
