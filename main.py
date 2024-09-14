@@ -185,6 +185,51 @@ def Sph2Cart(rho, theta,phi):
     
     return X, Y, Z
 
+def create_periodic_images(positions, box_sizes, periodic_dims='XY'):
+    """
+    Create periodic images of particles along specified dimensions.
+    
+    Parameters:
+    positions (numpy.ndarray): Array of shape (N, 3) containing particle positions.
+    box_sizes (tuple or numpy.ndarray): Lengths of the box in X, Y, and Z directions.
+    periodic_dims (str): String containing 'X', 'Y', and/or 'Z' to specify periodic dimensions.
+    
+    Returns:
+    numpy.ndarray: Array containing original positions and their periodic images.
+    """
+    N = positions.shape[0]
+    box_sizes = np.asarray(box_sizes)
+    
+    # Create base offsets
+    base_offsets = np.array([[0, 0, 0]])
+    
+    # Generate offsets based on periodic dimensions
+    for dim, axis in zip('XYZ', range(3)):
+        if dim in periodic_dims.upper():
+            new_offsets = []
+            for offset in base_offsets:
+                for direction in [-1, 1]:
+                    new_offset = offset.copy()
+                    new_offset[axis] = direction
+                    new_offsets.append(new_offset)
+            base_offsets = np.vstack((base_offsets, new_offsets))
+    
+    # Number of images (including original)
+    num_images = len(base_offsets)
+    
+    # Tile the original positions
+    tiled_positions = np.tile(positions, (num_images, 1))
+    
+    # Create offsets for all particles
+    all_offsets = np.repeat(base_offsets, N, axis=0)
+    
+    # Scale offsets by box sizes
+    scaled_offsets = all_offsets * box_sizes
+    
+    # Add offsets to the tiled positions
+    periodic_positions = tiled_positions + scaled_offsets
+    
+    return periodic_positions
 #%%
 
 from sklearn.decomposition import PCA
@@ -205,12 +250,46 @@ if __name__ == '__main__':
     
     k = 150
     
-    U = mda.Universe('init.gro')
+    U = mda.Universe('check.gro')
     PO4 = U.select_atoms('name PO4')
     
     leafs = LF(U, PO4)
     
     points = leafs.groups(0).positions - leafs.groups(0).center_of_geometry()
+    
+    #%%
+    
+    periodixy = 'XY'
+    
+    N = points.shape[0]
+    LX, LY, LZ = 2*points[:,0].max(), 2*points[:,1].max(), 2*points[:,2].max()
+    
+    periodic_points = np.zeros((int(N*9), 3), dtype =  points.dtype)
+    
+    periodic_points[:N, :]      = points
+    periodic_points[N:2*N, :]   = points + np.array([-LX, LY, 0])
+    periodic_points[2*N:3*N, :] = points + np.array([0, LY, 0])
+    periodic_points[3*N:4*N, :] = points + np.array([LX, LY, 0])
+    periodic_points[4*N:5*N, :] = points + np.array([-LX, 0, 0])
+    periodic_points[5*N:6*N, :] = points + np.array([LX, 0, 0])
+    periodic_points[6*N:7*N, :] = points + np.array([-LX, -LY, 0])
+    periodic_points[7*N:8*N, :] = points + np.array([0, -LY, 0])
+    periodic_points[8*N:, :]    = points + np.array([LX, -LY, 0])
+    
+    #%%
+    periodic_points = create_periodic_images(points, (LX, LY, LZ), periodic_dims = 'YZ')
+    
+    fig = mlab.figure(size = (720,720))
+    
+    mlab.points3d(periodic_points[:,0],
+                  periodic_points[:,1],
+                  periodic_points[:,2],
+                  scale_factor = 10,
+                  figure = fig)
+    
+    mlab.show()
+    
+    #%%
     
     SURFACE = Surface(points, K = k)
     
@@ -230,7 +309,6 @@ if __name__ == '__main__':
     #%%
     
     UV, tri = SURFACE.TriangulateSphere()
-    
     
     fig, ax = plt.subplots(figsize = (7,7))
     

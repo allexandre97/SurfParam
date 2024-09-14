@@ -19,14 +19,28 @@ from scipy.spatial import Delaunay
 class Surface:
     
     def __init__(self,
-                 POINTS : np.array,
-                 K      : int = 100,
-                 D      : int = 6) -> None:
+                 POINTS      : np.array,
+                 NNeighbors  : int = 100,
+                 D           : int = 6,
+                 Geometry    : str = 'PLANE',
+                 Periodicity : str = 'XY') -> None:
         
-        self.MathHandler = Maths(POINTS)
-        self.POINTS      = POINTS
+        if Geometry.upper() == 'PLANE':
+            
+            tempHandler = Maths(POINTS, NNeighbors)
+            
+            self.POINTS = tempHandler.CreatePeriodicImages((POINTS[:,0].max(),
+                                                            POINTS[:,1].max(),
+                                                            POINTS[:,2].max()),
+                                                           Periodicity)
+        else:
+            
+            self.POINTS = POINTS
+            
         
-        mesh0 = self.__PoissonSurface(K, D)
+        self.MathHandler = Maths(self.POINTS, NNeighbors)
+        
+        mesh0 = self.__PoissonSurface(NNeighbors, D)
         
         mesh0.compute_vertex_normals()
         mesh0.compute_triangle_normals()
@@ -212,7 +226,7 @@ class Surface:
         
         V = np.array([v.co for v in bm.verts])
         
-        tmpMaths = Maths(V)
+        tmpMaths = Maths(V, )
         triangles = np.array([[v.index for v in face.verts] for face in bm.faces])
         
         _, vert_ids = tmpMaths.KNN(POINTS, 1)
@@ -276,6 +290,19 @@ class Surface:
         
         return UV, tri
     
+    def TriangulatePlane(self,) -> tuple:
+        
+        self.UnwrapMesh()
+        UV = self.ProjectPointsOnUV(self.POINTS)
+        
+        tri = Delaunay(UV,
+                       qhull_options = 'QJ')
+        hull = tri.convex_hull.ravel()
+        
+        tri = [sorted(t) for t in tri.simplices if not any(_ in hull for _ in t)]
+        
+        return UV, tri
+        
     def MeshToArray(self,):
         
         vertices  = []
